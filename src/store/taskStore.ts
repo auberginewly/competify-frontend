@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { AgentStatus } from '@/types/api'
 import type { DagEdge, DagNode } from '@/types/ui'
 
@@ -16,15 +17,22 @@ interface TaskState {
   reset: () => void
 }
 
-export const useTaskStore = create<TaskState>((set) => ({
-  taskId: null,
-  nodes: [],
-  edges: [],
-  statuses: {},
+export const useTaskStore = create<TaskState>()(
+  persist(
+    (set) => ({
+      taskId: null,
+      nodes: [],
+      edges: [],
+      statuses: {},
 
-  setTask: (id) => set({ taskId: id, statuses: {} }),
-  setGraph: (nodes, edges) => set({ nodes, edges }),
-  updateStatus: (agentId, status) =>
-    set((s) => ({ statuses: { ...s.statuses, [agentId]: status } })),
-  reset: () => set({ taskId: null, nodes: [], edges: [], statuses: {} }),
-}))
+      setTask: (id) => set({ taskId: id, statuses: {} }),
+      setGraph: (nodes, edges) => set({ nodes, edges }),
+      updateStatus: (agentId, status) =>
+        set((s) => ({ statuses: { ...s.statuses, [agentId]: status } })),
+      reset: () => set({ taskId: null, nodes: [], edges: [], statuses: {} }),
+    }),
+    {
+      name: 'competify-task',
+    }
+  )
+)

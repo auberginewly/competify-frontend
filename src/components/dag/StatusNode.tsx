@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import type { NodeProps } from 'reactflow'
+import { Handle, Position, type NodeProps } from 'reactflow'
 import type { AgentStatus } from '@/types/api'
 
 export interface StatusNodeData {
@@ -47,8 +47,10 @@ export const StatusNode = memo(function StatusNode({ data }: NodeProps<StatusNod
         ${statusBorder(status)} ${statusText(status)} ${statusAnimation(status)}
       `}
     >
+      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="leading-tight">{label}</div>
       <div className="mt-0.5 text-[10px] opacity-70">{status}</div>
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   )
 })

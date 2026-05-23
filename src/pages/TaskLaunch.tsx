@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useCreateTask } from '@/hooks/useTaskApi'
+import { useCreateTask, useGetTask } from '@/hooks/useTaskApi'
+import { useTaskStore } from '@/store/taskStore'
 
 const dimensions = [
   { key: 'feature', label: '功能维度' },
@@ -12,9 +13,12 @@ const dimensions = [
 export default function TaskLaunch() {
   const navigate = useNavigate()
   const { submit, loading } = useCreateTask()
-  const [name, setName] = useState('Cursor')
-  const [url, setUrl] = useState('https://cursor.com')
-  const [selected, setSelected] = useState<string[]>(['feature', 'pricing'])
+  const { setTask, taskId } = useTaskStore()
+  const { task } = useGetTask(taskId ?? undefined, 3000)
+  const isTaskRunning = !!taskId && task?.status !== 'done'
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [selected, setSelected] = useState<string[]>([])
 
   const toggle = (key: string) => {
     setSelected((prev) =>
@@ -32,6 +36,7 @@ export default function TaskLaunch() {
       requested_by: 'demo-user',
     })
     if (result) {
+      setTask(result)
       navigate(`/dag/${result}`)
     }
   }
@@ -97,22 +102,22 @@ export default function TaskLaunch() {
 
         <button
           type="button"
-          disabled={!name.trim() || selected.length === 0 || loading}
+          disabled={isTaskRunning || !name.trim() || selected.length === 0 || loading}
           onClick={handleSubmit}
           className={`
             w-full rounded px-4 py-2.5 text-sm font-medium text-white transition
-            ${loading || !name.trim() || selected.length === 0
+            ${isTaskRunning || loading || !name.trim() || selected.length === 0
               ? 'cursor-not-allowed bg-blue-600/50'
               : 'bg-blue-600 hover:bg-blue-500'}
           `}
         >
-          {loading ? '创建任务中…' : '提交分析任务'}
+          {isTaskRunning ? '任务进行中…' : loading ? '创建任务中…' : '提交分析任务'}
         </button>
       </section>
 
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-4 text-xs text-slate-500">
-        <div className="mb-1 font-medium text-slate-400">快速体验</div>
-        <p>输入「Cursor」并选择功能+定价维度，提交后可在 DAG 监控页看到 14 个 Agent 节点的自动模拟执行过程。</p>
+        <div className="mb-1 font-medium text-slate-400">使用说明</div>
+        <p>输入任意竞品名称（如 Notion、Linear、Figma），选择分析维度，提交后跳转 DAG 监控页，14 个 Agent 节点实时执行并输出报告。</p>
       </div>
     </div>
   )

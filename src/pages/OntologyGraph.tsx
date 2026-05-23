@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { ontologyApi } from '@/api/ontology'
+import { useTaskStore } from '@/store/taskStore'
 import type { Competitor } from '@/types/api'
 
 interface NodeDef {
   id: string
+  label: string
   type: 'Competitor' | 'Feature' | 'Pricing' | 'Tech'
   x: number
   y: number
@@ -30,32 +32,36 @@ const typeLabel = (t: string) => {
 }
 
 export default function OntologyGraph() {
+  const taskId = useTaskStore((s) => s.taskId)
   const [hovered, setHovered] = useState<string | null>(null)
   const [competitors, setCompetitors] = useState<Competitor[]>([])
   const [nodes, setNodes] = useState<NodeDef[]>([])
   const [edges, setEdges] = useState<{ source: string; target: string }[]>([])
 
   useEffect(() => {
+    // Only fetch ontology data after a task has been run.
+    if (!taskId) return
     ontologyApi.list()
       .then(setCompetitors)
       .catch(console.error)
     ontologyApi.graph()
       .then((res) => {
         const apiNodes = (res.nodes ?? []).map((n: any, i: number) => ({
-          id: n.data?.label ?? n.data?.id ?? `n${i}`,
+          id: n.data?.id ?? n.id ?? `n${i}`,
+          label: n.data?.label ?? n.label ?? n.data?.id ?? n.id ?? `n${i}`,
           type: (n.data?.type === 'competitor' ? 'Competitor' : 'Feature') as NodeDef['type'],
           x: 20 + (i % 5) * 15,
           y: 20 + Math.floor(i / 5) * 20,
         }))
         const apiEdges = (res.edges ?? []).map((e: any) => ({
-          source: e.data?.source ?? '',
-          target: e.data?.target ?? '',
+          source: e.data?.source ?? e.source ?? '',
+          target: e.data?.target ?? e.target ?? '',
         }))
         setNodes(apiNodes.length ? apiNodes : [])
         setEdges(apiEdges)
       })
       .catch(console.error)
-  }, [])
+  }, [taskId])
 
   return (
     <div className="space-y-6 p-8">
@@ -68,7 +74,12 @@ export default function OntologyGraph() {
 
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-6">
         <div className="relative h-96 rounded border border-dashed border-slate-700 bg-slate-950/60">
-          {nodes.length === 0 ? (
+          {!taskId ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+              <span className="text-2xl">🕸️</span>
+              <span>请先在「任务发起」页运行一次分析</span>
+            </div>
+          ) : nodes.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-slate-500">
               暂无图谱数据
             </div>
@@ -82,7 +93,7 @@ export default function OntologyGraph() {
                   onMouseEnter={() => setHovered(n.id)}
                   onMouseLeave={() => setHovered(null)}
                 >
-                  {n.id}
+                  {n.label}
                   {hovered === n.id && (
                     <div className="absolute left-1/2 top-full z-10 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-[10px] text-slate-300 shadow-lg ring-1 ring-slate-700">
                       {typeLabel(n.type)} 节点
@@ -126,20 +137,22 @@ export default function OntologyGraph() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-        <div className="text-sm font-medium text-slate-200">竞品列表（API）</div>
-        <div className="mt-2 space-y-2">
-          {competitors.map((c) => (
-            <div key={c.uid} className="flex items-center justify-between text-xs text-slate-400">
-              <span className="font-medium text-slate-300">{c.company_name}</span>
-              <span>{c.headquarters}</span>
-            </div>
-          ))}
-          {competitors.length === 0 && (
-            <div className="text-xs text-slate-600">暂无数据</div>
-          )}
+      {taskId && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+          <div className="text-sm font-medium text-slate-200">竞品列表（API）</div>
+          <div className="mt-2 space-y-2">
+            {competitors.map((c) => (
+              <div key={c.uid} className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-medium text-slate-300">{c.company_name}</span>
+                <span>{c.headquarters}</span>
+              </div>
+            ))}
+            {competitors.length === 0 && (
+              <div className="text-xs text-slate-600">暂无数据</div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

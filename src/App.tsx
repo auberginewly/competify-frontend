@@ -4,16 +4,19 @@ import DagMonitor from './pages/DagMonitor'
 import Provenance from './pages/Provenance'
 import OntologyGraph from './pages/OntologyGraph'
 import ReportView from './pages/ReportView'
-
-const navItems = [
-  { to: '/', label: '任务发起' },
-  { to: '/dag/demo', label: 'DAG 监控' },
-  { to: '/provenance/demo', label: '溯源审计' },
-  { to: '/ontology', label: '本体图谱' },
-  { to: '/report/demo', label: '报告阅读' },
-]
+import { useTaskStore } from '@/store/taskStore'
 
 export default function App() {
+  const taskId = useTaskStore((s) => s.taskId)
+
+  const navItems = [
+    { to: '/', label: '任务发起' },
+    { to: taskId ? `/dag/${taskId}` : '/dag/demo', label: 'DAG 监控' },
+    { to: taskId ? `/provenance/${taskId}` : '/provenance/demo', label: '溯源审计' },
+    { to: '/ontology', label: '本体图谱' },
+    { to: taskId ? `/report/${taskId}` : '/report/demo', label: '报告阅读' },
+  ]
+
   return (
     <div className="flex h-full">
       <aside className="w-56 shrink-0 border-r border-slate-800 bg-slate-900 p-4">

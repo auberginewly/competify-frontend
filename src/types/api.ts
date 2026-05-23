@@ -156,6 +156,7 @@ export interface FinalReviewOutput {
   comment: string;
   approved_at: string;
   approved_by: string;
+  footnotes: Footnote[];
 }
 /**
  * FinalReport 系统最终输出

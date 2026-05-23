@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
+import { useGetTask } from '@/hooks/useTaskApi'
 import ReactFlow, {
   Background,
   Controls,
@@ -86,7 +87,20 @@ function DAGCanvas() {
   const { taskId } = useParams<{ taskId: string }>()
   const { logs, connected } = useDagSocket(taskId)
   const statuses = useTaskStore((s) => s.statuses)
-  const nodes = useMemo(() => buildNodes(statuses), [statuses])
+  // Poll real task status every 3s — SimulateProgress finishes early but LLM takes longer.
+  const { task } = useGetTask(taskId, 3000)
+  const isDone = task?.status === 'done'
+
+  // Keep final_reviewer as "running" until backend confirms done.
+  // SimulateProgress marks it done at ~13s; real DAG may take 30-90s.
+  const effectiveStatuses = useMemo(() => {
+    if (isDone || !statuses['final_reviewer']) return statuses
+    return statuses['final_reviewer'] === 'done'
+      ? { ...statuses, final_reviewer: 'running' as const }
+      : statuses
+  }, [statuses, isDone])
+
+  const nodes = useMemo(() => buildNodes(effectiveStatuses), [effectiveStatuses])
   const edges = useMemo(() => buildEdges(), [])
 
   return (
@@ -143,6 +157,15 @@ function DAGCanvas() {
             ))}
           </div>
         </div>
+
+        {isDone && (
+          <Link
+            to={`/report/${taskId}`}
+            className="block rounded-lg border border-blue-500/40 bg-blue-600/10 p-3 text-center text-sm font-medium text-blue-300 transition hover:bg-blue-600/20"
+          >
+            ✅ 分析完成 — 查看报告 →
+          </Link>
+        )}
       </div>
     </div>
   )

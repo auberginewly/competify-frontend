@@ -52,6 +52,12 @@ export function useDagSocket(taskId: string | undefined) {
       ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data) as DagEvent
+          // Don't overwrite existing non-pending status with pending on reconnect.
+          // The server sends all agents as pending when WebSocket first connects.
+          const currentStatus = useTaskStore.getState().statuses[data.node_name]
+          if (data.status === 'pending' && currentStatus && currentStatus !== 'pending') {
+            return
+          }
           updateStatus(data.node_name, data.status as AgentStatus)
           if (data.logs && data.logs.length > 0) {
             logsRef.current = [...logsRef.current, ...data.logs].slice(-50)
