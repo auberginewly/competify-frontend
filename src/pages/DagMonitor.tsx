@@ -1,56 +1,218 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import ReactFlow, {
+  Background,
+  Controls,
+  type Edge,
+  MarkerType,
+  type Node,
+  ReactFlowProvider,
+} from 'reactflow'
+import 'reactflow/dist/style.css'
+import { StatusNode, type StatusNodeData } from '@/components/dag/StatusNode'
+import type { AgentStatus } from '@/types/api'
 
-// Phase 0 placeholder. Phase 7 接入：ReactFlow + useDagSocket(taskId) + StatusNode + ParticleEdge。
-export default function DagMonitor() {
-  const { taskId } = useParams<{ taskId: string }>()
+const nodeTypes = { status: StatusNode }
 
-  const fakeAgents: Array<{ id: string; status: 'pending' | 'running' | 'review' | 'error' | 'done' }> = [
-    { id: 'orchestrator',   status: 'done' },
-    { id: 'collector_web',  status: 'done' },
-    { id: 'collector_api',  status: 'running' },
-    { id: 'cleaner',        status: 'pending' },
-    { id: 'analyzer',       status: 'pending' },
-    { id: 'cross_reviewer', status: 'pending' },
-    { id: 'writer',         status: 'pending' },
+interface AgentDef {
+  id: string
+  label: string
+  x: number
+  y: number
+}
+
+const agentDefs: AgentDef[] = [
+  { id: 'orchestrator',   label: 'Orchestrator',   x: 400, y: 40 },
+  { id: 'collector_web',  label: 'WebCollector',   x: 80,  y: 160 },
+  { id: 'collector_api',  label: 'APICollector',   x: 240, y: 160 },
+  { id: 'collector_fin',  label: 'Financial',      x: 400, y: 160 },
+  { id: 'collector_rev',  label: 'Review',         x: 560, y: 160 },
+  { id: 'collector_soc',  label: 'Social',         x: 720, y: 160 },
+  { id: 'cleaner',        label: 'Cleaner',        x: 400, y: 280 },
+  { id: 'analyzer_feat',  label: 'Feature',        x: 200, y: 400 },
+  { id: 'analyzer_price', label: 'Pricing',        x: 360, y: 400 },
+  { id: 'analyzer_tech',  label: 'Tech',           x: 520, y: 400 },
+  { id: 'analyzer_mkt',   label: 'Market',         x: 680, y: 400 },
+  { id: 'cross_reviewer', label: 'CrossReviewer',  x: 400, y: 520 },
+  { id: 'writer',         label: 'Writer',         x: 400, y: 640 },
+  { id: 'final_reviewer', label: 'FinalReviewer',  x: 400, y: 760 },
+]
+
+function buildEdges(): Edge[] {
+  const e = (s: string, t: string) => ({
+    id: `${s}->${t}`,
+    source: s,
+    target: t,
+    animated: true,
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
+    style: { stroke: '#64748b', strokeWidth: 1.5 },
+  })
+  return [
+    e('orchestrator', 'collector_web'),
+    e('orchestrator', 'collector_api'),
+    e('orchestrator', 'collector_fin'),
+    e('orchestrator', 'collector_rev'),
+    e('orchestrator', 'collector_soc'),
+    e('collector_web', 'cleaner'),
+    e('collector_api', 'cleaner'),
+    e('collector_fin', 'cleaner'),
+    e('collector_rev', 'cleaner'),
+    e('collector_soc', 'cleaner'),
+    e('cleaner', 'analyzer_feat'),
+    e('cleaner', 'analyzer_price'),
+    e('cleaner', 'analyzer_tech'),
+    e('cleaner', 'analyzer_mkt'),
+    e('analyzer_feat', 'cross_reviewer'),
+    e('analyzer_price', 'cross_reviewer'),
+    e('analyzer_tech', 'cross_reviewer'),
+    e('analyzer_mkt', 'cross_reviewer'),
+    e('cross_reviewer', 'writer'),
+    e('writer', 'final_reviewer'),
   ]
+}
 
-  const statusClass = (s: typeof fakeAgents[number]['status']) => {
-    switch (s) {
-      case 'pending': return 'border-status-pending text-status-pending'
-      case 'running': return 'border-status-running text-status-running animate-breathe'
-      case 'review':  return 'border-status-review text-status-review animate-blink'
-      case 'error':   return 'border-status-error text-status-error animate-shake'
-      case 'done':    return 'border-status-done text-status-done'
-    }
-  }
+function buildNodes(statusMap: Map<string, AgentStatus>): Node<StatusNodeData>[] {
+  return agentDefs.map((a) => ({
+    id: a.id,
+    type: 'status',
+    position: { x: a.x, y: a.y },
+    data: { label: a.label, status: statusMap.get(a.id) ?? 'pending' },
+  }))
+}
+
+// executionWave returns which "wave" an agent belongs to for simulated progress.
+function executionWave(id: string): number {
+  if (id === 'orchestrator') return 0
+  if (id.startsWith('collector')) return 1
+  if (id === 'cleaner') return 2
+  if (id.startsWith('analyzer')) return 3
+  if (id === 'cross_reviewer') return 4
+  if (id === 'writer') return 5
+  if (id === 'final_reviewer') return 6
+  return 0
+}
+
+function useMockDAGProgress() {
+  const [statusMap, setStatusMap] = useState<Map<string, AgentStatus>>(
+    () => new Map(agentDefs.map((a) => [a.id, 'pending']))
+  )
+  const [logs, setLogs] = useState<string[]>([])
+  const tickRef = useRef(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      tickRef.current += 1
+      const tick = tickRef.current
+      setStatusMap((prev) => {
+        const next = new Map(prev)
+        agentDefs.forEach((a) => {
+          const wave = executionWave(a.id)
+          const start = wave * 8 + 1
+          const end = start + 5
+          const s = next.get(a.id)!
+          if (tick >= start && s === 'pending') {
+            next.set(a.id, 'running')
+          } else if (tick >= end && s === 'running') {
+            next.set(a.id, 'done')
+          }
+        })
+        return next
+      })
+      if (tick % 4 === 0) {
+        setLogs((l) => {
+          const msg = `[${new Date().toLocaleTimeString()}] tick=${tick} running=${agentDefs.filter((a) => statusMap.get(a.id) === 'running').length}`
+          return [...l.slice(-19), msg]
+        })
+      }
+      if (tick > 60) {
+        clearInterval(interval)
+      }
+    }, 400)
+    return () => clearInterval(interval)
+  }, [statusMap])
+
+  return { statusMap, logs }
+}
+
+function DAGCanvas() {
+  const { taskId } = useParams<{ taskId: string }>()
+  const { statusMap, logs } = useMockDAGProgress()
+  const nodes = useMemo(() => buildNodes(statusMap), [statusMap])
+  const edges = useMemo(() => buildEdges(), [])
 
   return (
-    <div className="space-y-6 p-8">
-      <header>
-        <h1 className="text-2xl font-semibold">DAG 实时监控</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          任务 ID: <span className="font-mono text-slate-300">{taskId}</span>
-        </p>
-      </header>
-
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-4 text-xs text-slate-500">
-          ReactFlow 画布占位区（Phase 7 接 ReactFlow + WebSocket）
-        </div>
-        <div className="grid grid-cols-3 gap-3 md:grid-cols-4 lg:grid-cols-7">
-          {fakeAgents.map((a) => (
-            <div
-              key={a.id}
-              className={`rounded border-2 bg-slate-800 px-3 py-3 text-center text-xs ${statusClass(a.status)}`}
-            >
-              <div className="font-medium">{a.id}</div>
-              <div className="mt-1 opacity-80">{a.status}</div>
-            </div>
-          ))}
+    <div className="flex h-full gap-4">
+      <div className="relative flex-1 rounded-lg border border-slate-800 bg-slate-950">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          fitView
+          minZoom={0.3}
+          maxZoom={1.5}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background color="#334155" gap={20} />
+          <Controls />
+        </ReactFlow>
+        <div className="absolute right-3 top-3 rounded bg-slate-900/80 px-2 py-1 text-[10px] text-slate-400 backdrop-blur">
+          task: {taskId ?? 'demo'}
         </div>
       </div>
 
-      <p className="text-xs text-slate-500">Phase 0 占位页面。真实 DAG 可视化在 Phase 7。</p>
+      <div className="flex w-64 shrink-0 flex-col gap-3">
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-3">
+          <div className="mb-2 text-xs font-medium text-slate-300">执行日志</div>
+          <div className="h-48 space-y-1 overflow-auto text-[10px] text-slate-500">
+            {logs.length === 0 && <div className="text-slate-600">等待任务启动…</div>}
+            {logs.map((l, i) => (
+              <div key={i} className="font-mono">{l}</div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-3">
+          <div className="mb-2 text-xs font-medium text-slate-300">状态图例</div>
+          <div className="space-y-1.5 text-[10px]">
+            {([
+              ['pending', '灰 / 等待'],
+              ['running', '绿 / 运行中'],
+              ['review',  '黄 / 审查'],
+              ['error',   '红 / 错误'],
+              ['done',    '蓝 / 完成'],
+            ] as [AgentStatus, string][]).map(([s, label]) => (
+              <div key={s} className="flex items-center gap-2">
+                <span className={`inline-block h-2 w-2 rounded-full ${
+                  s === 'pending' ? 'bg-gray-400' :
+                  s === 'running' ? 'bg-green-400 animate-breathe' :
+                  s === 'review'  ? 'bg-yellow-400 animate-blink' :
+                  s === 'error'   ? 'bg-red-400 animate-shake' :
+                  'bg-blue-400'
+                }`} />
+                <span className="text-slate-400">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function DagMonitor() {
+  return (
+    <div className="flex h-full flex-col p-6">
+      <header className="mb-4">
+        <h1 className="text-xl font-semibold text-slate-100">DAG 实时监控</h1>
+        <p className="mt-0.5 text-xs text-slate-400">
+          14 个节点 · 自动模拟执行进度 · ReactFlow 画布
+        </p>
+      </header>
+      <div className="min-h-0 flex-1">
+        <ReactFlowProvider>
+          <DAGCanvas />
+        </ReactFlowProvider>
+      </div>
     </div>
   )
 }
