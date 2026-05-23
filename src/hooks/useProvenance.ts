@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { auditApi } from '@/api/audit'
-import type { AuditEvent } from '@/types/ui'
+import type { AuditEvent } from '@/api/audit'
 
-// 溯源时间线 hook。Phase 0 签名落地，Phase 3 后端有 endpoint 时拉数据。
+// 溯源时间线 hook。调用后端 /api/v1/audit/:id 获取审计事件。
 export function useProvenance(reportId: string | undefined) {
   const [events, setEvents] = useState<AuditEvent[]>([])
   const [error, setError] = useState<Error | null>(null)
@@ -11,7 +11,7 @@ export function useProvenance(reportId: string | undefined) {
     if (!reportId) return
     auditApi
       .get(reportId)
-      .then((res: any) => setEvents(res.events ?? []))
+      .then((res) => setEvents(res.events ?? []))
       .catch((e: Error) => setError(e))
   }, [reportId])
 

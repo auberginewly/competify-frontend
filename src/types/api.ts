@@ -95,6 +95,7 @@ export interface ReviewReport {
   task_id: string;
   is_approved: boolean;
   conflicts: Conflict[];
+  analyses: (AnalysisResult | undefined)[]; // forwarded from analyzers for writer
   next_action: string; // APPROVE / RETRY_AUTO / REJECT_HUMAN
   reviewed_at: string;
   reviewer_id: string;
@@ -168,6 +169,7 @@ export interface FinalReport {
   approved_by: string;
   approved_at: string;
   merkle_root: string;
+  footnotes: Footnote[];
 }
 /**
  * Competitor 竞品实体

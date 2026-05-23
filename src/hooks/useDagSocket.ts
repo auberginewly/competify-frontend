@@ -10,39 +10,65 @@ interface DagEvent {
   logs: string[]
 }
 
+const MAX_RECONNECT = 5
+const BASE_DELAY = 1000
+
 export function useDagSocket(taskId: string | undefined) {
   const [logs, setLogs] = useState<string[]>([])
   const [connected, setConnected] = useState(false)
   const updateStatus = useTaskStore((s) => s.updateStatus)
   const logsRef = useRef<string[]>([])
+  const reconnectCount = useRef(0)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!taskId) return
 
-    const ws = new WebSocket(`ws://localhost:8080/api/v1/tasks/${taskId}/dag`)
+    let ws: WebSocket | null = null
+    let cancelled = false
 
-    ws.onopen = () => setConnected(true)
-    ws.onclose = () => setConnected(false)
-    ws.onerror = (e) => {
-      console.error('[ws] error', e)
-      setConnected(false)
-    }
+    const connect = () => {
+      if (cancelled) return
+      ws = new WebSocket(`ws://localhost:8080/api/v1/tasks/${taskId}/dag`)
 
-    ws.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data) as DagEvent
-        updateStatus(data.node_name, data.status as AgentStatus)
-        if (data.logs && data.logs.length > 0) {
-          logsRef.current = [...logsRef.current, ...data.logs].slice(-50)
-          setLogs(logsRef.current)
+      ws.onopen = () => {
+        reconnectCount.current = 0
+        setConnected(true)
+      }
+
+      ws.onclose = () => {
+        setConnected(false)
+        if (cancelled || reconnectCount.current >= MAX_RECONNECT) return
+        reconnectCount.current++
+        const delay = Math.min(BASE_DELAY * Math.pow(2, reconnectCount.current), 30000)
+        timerRef.current = setTimeout(connect, delay)
+      }
+
+      ws.onerror = (e) => {
+        console.error('[ws] error', e)
+        setConnected(false)
+      }
+
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data) as DagEvent
+          updateStatus(data.node_name, data.status as AgentStatus)
+          if (data.logs && data.logs.length > 0) {
+            logsRef.current = [...logsRef.current, ...data.logs].slice(-50)
+            setLogs(logsRef.current)
+          }
+        } catch (err) {
+          console.error('[ws] parse error', err)
         }
-      } catch (err) {
-        console.error('[ws] parse error', err)
       }
     }
 
+    connect()
+
     return () => {
-      ws.close()
+      cancelled = true
+      if (timerRef.current) clearTimeout(timerRef.current)
+      ws?.close()
     }
   }, [taskId, updateStatus])
 
