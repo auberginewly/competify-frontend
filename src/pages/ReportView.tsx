@@ -1,73 +1,133 @@
-import { useParams } from 'react-router-dom'
+import { useMemo } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
 
-// Phase 0 placeholder. Phase 7 接入：react-markdown + 脚注下钻 + GET /api/v1/reports/:id。
+const fakeMarkdown = `# 竞品分析报告 — Cursor
+
+## 1. 产品定位
+
+Cursor 是基于 **VS Code fork** 的 AI-native 编辑器，主打 AI Pair Programming 体验。其差异化在于将 LLM 深度嵌入 IDE 工作流，而非简单的侧边栏 Chat。[^fn-1]
+
+## 2. 核心功能矩阵
+
+| 功能 | 可用性 | 成熟度 |
+|------|--------|--------|
+| Tab 自动补全 | ✅ | 5 |
+| Composer 多文件编辑 | ✅ | 4 |
+| Agent Mode 自主任务执行 | ✅ | 3 |
+| @Codebase 上下文索引 | ✅ | 4 |
+
+[^fn-1]: 功能数据来源于 cursor.sh 官网及 GitHub Releases 页面，置信度 0.88。
+
+## 3. 定价策略
+
+- **Free**: 有限次数的 fast request
+- **Pro $20/月**: 500 次 fast + 无限 slow
+- **Business $40/月**: 团队共享额度 + 管理员控制台
+
+[^fn-2]: 定价数据抓取自 cursor.com/pricing，2026-05 有效。置信度 0.95。
+
+## 4. 技术栈推断
+
+编辑器底层为 Electron + VS Code fork，模型层混合自训练 Tab 模型与 GPT-4o / Claude Sonnet。[^fn-3]
+
+---
+
+*报告由 CompetifyAI 多 Agent 协作系统生成，每条结论附带 Merkle Proof 可验证。*
+`
+
+const fakeFootnotes = [
+  { id: 'fn-1', conclusion: 'Cursor 核心功能矩阵', confidence: 0.88, provenance_id: 'prov-1', viking_uri: 'viking://competify/tasks/task_cursor/analyzers/feature' },
+  { id: 'fn-2', conclusion: 'Cursor 定价策略', confidence: 0.95, provenance_id: 'prov-2', viking_uri: 'viking://competify/tasks/task_cursor/analyzers/pricing' },
+  { id: 'fn-3', conclusion: 'Cursor 技术栈推断', confidence: 0.72, provenance_id: 'prov-3', viking_uri: 'viking://competify/tasks/task_cursor/analyzers/tech' },
+]
+
+const fakeMerkleRoot = '0x7a3f9e2b1c8d4e5f6a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f'
+
+function confidenceColor(c: number): string {
+  if (c >= 0.9) return 'text-green-400'
+  if (c >= 0.75) return 'text-blue-400'
+  if (c >= 0.6) return 'text-yellow-400'
+  return 'text-red-400'
+}
+
+function confidenceLabel(c: number): string {
+  if (c >= 0.9) return 'HIGH'
+  if (c >= 0.75) return 'MEDIUM'
+  if (c >= 0.6) return 'LOW'
+  return 'SUSPICIOUS'
+}
+
 export default function ReportView() {
   const { id } = useParams<{ id: string }>()
-
-  const fakeSections = [
-    {
-      title: '产品定位',
-      body: 'Cursor 是基于 VS Code fork 的 AI-native 编辑器，主打 AI Pair Programming 体验。',
-      confidence: 0.91,
-      sources: 4,
-    },
-    {
-      title: '核心功能',
-      body: 'Tab 自动补全 / Composer 多文件编辑 / Agent Mode 自主任务执行 / @Codebase 上下文索引。',
-      confidence: 0.88,
-      sources: 7,
-    },
-    {
-      title: '定价策略',
-      body: 'Free / Pro $20/月 / Business $40/月。Pro 包含 500 次 fast request + 无限 slow request。',
-      confidence: 0.95,
-      sources: 3,
-    },
-    {
-      title: '技术栈推断',
-      body: '编辑器：Electron + VS Code fork。模型：自训 Tab 模型 + GPT-4o / Claude Sonnet。',
-      confidence: 0.72,
-      sources: 5,
-    },
-  ]
+  const overallConfidence = useMemo(() => {
+    const sum = fakeFootnotes.reduce((acc, f) => acc + f.confidence, 0)
+    return sum / fakeFootnotes.length
+  }, [])
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-8">
-      <header>
-        <div className="text-xs text-slate-500">报告 ID: {id}</div>
-        <h1 className="mt-1 text-2xl font-semibold">竞品分析报告 — Cursor</h1>
-        <div className="mt-2 flex gap-3 text-xs text-slate-400">
-          <span>Phase 0 占位</span>
-          <span>•</span>
-          <span>Merkle Root: <span className="font-mono">0x000...000</span></span>
-        </div>
-      </header>
+    <div className="mx-auto flex max-w-5xl gap-6 p-8">
+      <article className="flex-1 space-y-6">
+        <header>
+          <div className="text-xs text-slate-500">报告 ID: {id}</div>
+          <h1 className="mt-1 text-2xl font-semibold text-slate-100">
+            竞品分析报告 — Cursor
+          </h1>
+          <div className="mt-2 flex items-center gap-4 text-xs text-slate-400">
+            <span>整体置信度:
+              <span className={`ml-1 font-medium ${confidenceColor(overallConfidence)}`}>
+                {confidenceLabel(overallConfidence)} ({overallConfidence.toFixed(2)})
+              </span>
+            </span>
+            <span>•</span>
+            <span className="font-mono text-slate-500">{fakeMerkleRoot.slice(0, 18)}…</span>
+          </div>
+        </header>
 
-      <article className="space-y-4">
-        {fakeSections.map((s, i) => (
-          <section key={i} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-slate-100">{s.title}</h2>
-              <div className="flex gap-3 text-xs text-slate-500">
-                <span>conf {s.confidence.toFixed(2)}</span>
-                <span>{s.sources} 处来源</span>
-              </div>
-            </div>
-            <p className="mt-2 text-sm leading-relaxed text-slate-300">{s.body}</p>
-            <button
-              type="button"
-              disabled
-              className="mt-3 text-xs text-blue-400 opacity-60"
-            >
-              查看溯源链 →
-            </button>
-          </section>
-        ))}
+        <div className="prose prose-invert max-w-none prose-headings:text-slate-100 prose-p:text-slate-300 prose-strong:text-slate-200 prose-table:text-slate-300 prose-th:text-slate-200 prose-td:text-slate-300 prose-tr:border-slate-700">
+          <ReactMarkdown>{fakeMarkdown}</ReactMarkdown>
+        </div>
+
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+          <div className="text-sm font-medium text-slate-200">Merkle Root</div>
+          <div className="mt-2 break-all font-mono text-xs text-slate-400">
+            {fakeMerkleRoot}
+          </div>
+          <Link
+            to={`/provenance/${id}`}
+            className="mt-3 inline-block text-xs text-blue-400 hover:text-blue-300"
+          >
+            查看完整溯源审计链 →
+          </Link>
+        </div>
       </article>
 
-      <p className="text-xs text-slate-500">
-        Phase 0 占位。Phase 7 接 react-markdown + 脚注下钻，跳转 /provenance/:reportId。
-      </p>
+      <aside className="w-72 shrink-0 space-y-4">
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+          <div className="text-sm font-medium text-slate-200">溯源脚注</div>
+          <div className="mt-3 space-y-3">
+            {fakeFootnotes.map((fn) => (
+              <div key={fn.id} className="rounded border border-slate-700/60 bg-slate-800/40 p-2.5">
+                <div className="text-xs text-slate-300">{fn.conclusion}</div>
+                <div className="mt-1.5 flex items-center justify-between text-[10px]">
+                  <span className={`font-medium ${confidenceColor(fn.confidence)}`}>
+                    {confidenceLabel(fn.confidence)} {fn.confidence.toFixed(2)}
+                  </span>
+                  <Link
+                    to={`/provenance/${id}?footnote=${fn.id}`}
+                    className="text-blue-400 hover:text-blue-300"
+                  >
+                    验证
+                  </Link>
+                </div>
+                <div className="mt-1 truncate font-mono text-[9px] text-slate-600">
+                  {fn.viking_uri}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
     </div>
   )
 }
