@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useCreateTask } from '@/hooks/useTaskApi'
 
 const dimensions = [
   { key: 'feature', label: '功能维度' },
@@ -10,10 +11,10 @@ const dimensions = [
 
 export default function TaskLaunch() {
   const navigate = useNavigate()
+  const { submit, loading } = useCreateTask()
   const [name, setName] = useState('Cursor')
   const [url, setUrl] = useState('https://cursor.com')
   const [selected, setSelected] = useState<string[]>(['feature', 'pricing'])
-  const [submitting, setSubmitting] = useState(false)
 
   const toggle = (key: string) => {
     setSelected((prev) =>
@@ -21,13 +22,18 @@ export default function TaskLaunch() {
     )
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim() || selected.length === 0) return
-    setSubmitting(true)
-    const taskId = `task_${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`
-    setTimeout(() => {
-      navigate(`/dag/${taskId}`)
-    }, 600)
+    const result = await submit({
+      competitor_name: name,
+      target_url: url,
+      dimensions: selected,
+      priority: 3,
+      requested_by: 'demo-user',
+    })
+    if (result) {
+      navigate(`/dag/${result.task_id}`)
+    }
   }
 
   return (
@@ -91,16 +97,16 @@ export default function TaskLaunch() {
 
         <button
           type="button"
-          disabled={!name.trim() || selected.length === 0 || submitting}
+          disabled={!name.trim() || selected.length === 0 || loading}
           onClick={handleSubmit}
           className={`
             w-full rounded px-4 py-2.5 text-sm font-medium text-white transition
-            ${submitting || !name.trim() || selected.length === 0
+            ${loading || !name.trim() || selected.length === 0
               ? 'cursor-not-allowed bg-blue-600/50'
               : 'bg-blue-600 hover:bg-blue-500'}
           `}
         >
-          {submitting ? '创建任务中…' : '提交分析任务'}
+          {loading ? '创建任务中…' : '提交分析任务'}
         </button>
       </section>
 

@@ -1,40 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
-
-const fakeMarkdown = `# 竞品分析报告 — Cursor
-
-## 1. 产品定位
-
-Cursor 是基于 **VS Code fork** 的 AI-native 编辑器，主打 AI Pair Programming 体验。其差异化在于将 LLM 深度嵌入 IDE 工作流，而非简单的侧边栏 Chat。[^fn-1]
-
-## 2. 核心功能矩阵
-
-| 功能 | 可用性 | 成熟度 |
-|------|--------|--------|
-| Tab 自动补全 | ✅ | 5 |
-| Composer 多文件编辑 | ✅ | 4 |
-| Agent Mode 自主任务执行 | ✅ | 3 |
-| @Codebase 上下文索引 | ✅ | 4 |
-
-[^fn-1]: 功能数据来源于 cursor.sh 官网及 GitHub Releases 页面，置信度 0.88。
-
-## 3. 定价策略
-
-- **Free**: 有限次数的 fast request
-- **Pro $20/月**: 500 次 fast + 无限 slow
-- **Business $40/月**: 团队共享额度 + 管理员控制台
-
-[^fn-2]: 定价数据抓取自 cursor.com/pricing，2026-05 有效。置信度 0.95。
-
-## 4. 技术栈推断
-
-编辑器底层为 Electron + VS Code fork，模型层混合自训练 Tab 模型与 GPT-4o / Claude Sonnet。[^fn-3]
-
----
-
-*报告由 CompetifyAI 多 Agent 协作系统生成，每条结论附带 Merkle Proof 可验证。*
-`
+import { reportsApi } from '@/api/reports'
+import type { FinalReport } from '@/types/api'
 
 const fakeFootnotes = [
   { id: 'fn-1', conclusion: 'Cursor 核心功能矩阵', confidence: 0.88, provenance_id: 'prov-1', viking_uri: 'viking://competify/tasks/task_cursor/analyzers/feature' },
@@ -60,10 +28,29 @@ function confidenceLabel(c: number): string {
 
 export default function ReportView() {
   const { id } = useParams<{ id: string }>()
+  const [report, setReport] = useState<FinalReport | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!id) return
+    setLoading(true)
+    reportsApi.get(id)
+      .then(setReport)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [id])
+
   const overallConfidence = useMemo(() => {
     const sum = fakeFootnotes.reduce((acc, f) => acc + f.confidence, 0)
     return sum / fakeFootnotes.length
   }, [])
+
+  if (loading) return <div className="p-8 text-slate-400">加载报告中…</div>
+  if (error) return <div className="p-8 text-red-400">加载失败: {error}</div>
+
+  const content = report?.content ?? ''
+  const merkleRoot = report?.merkle_root ?? fakeMerkleRoot
 
   return (
     <div className="mx-auto flex max-w-5xl gap-6 p-8">
@@ -71,7 +58,7 @@ export default function ReportView() {
         <header>
           <div className="text-xs text-slate-500">报告 ID: {id}</div>
           <h1 className="mt-1 text-2xl font-semibold text-slate-100">
-            竞品分析报告 — Cursor
+            竞品分析报告
           </h1>
           <div className="mt-2 flex items-center gap-4 text-xs text-slate-400">
             <span>整体置信度:
@@ -80,18 +67,18 @@ export default function ReportView() {
               </span>
             </span>
             <span>•</span>
-            <span className="font-mono text-slate-500">{fakeMerkleRoot.slice(0, 18)}…</span>
+            <span className="font-mono text-slate-500">{merkleRoot.slice(0, 18)}…</span>
           </div>
         </header>
 
         <div className="prose prose-invert max-w-none prose-headings:text-slate-100 prose-p:text-slate-300 prose-strong:text-slate-200 prose-table:text-slate-300 prose-th:text-slate-200 prose-td:text-slate-300 prose-tr:border-slate-700">
-          <ReactMarkdown>{fakeMarkdown}</ReactMarkdown>
+          <ReactMarkdown>{content}</ReactMarkdown>
         </div>
 
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
           <div className="text-sm font-medium text-slate-200">Merkle Root</div>
           <div className="mt-2 break-all font-mono text-xs text-slate-400">
-            {fakeMerkleRoot}
+            {merkleRoot}
           </div>
           <Link
             to={`/provenance/${id}`}

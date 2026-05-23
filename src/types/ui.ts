@@ -4,15 +4,9 @@
 
 import type { AgentStatus } from './api'
 
-// 任务发起页占位
-export interface CreateTaskInput {
-  competitor: string
-  dimensions: string[]
-}
-
-// 任务响应占位
+// 任务响应占位（对齐后端 stub 返回的 taskStatus）
 export interface Task {
-  id: string
+  task_id: string
   status: AgentStatus
   created_at: string
 }

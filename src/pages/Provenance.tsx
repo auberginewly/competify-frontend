@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { auditApi } from '@/api/audit'
 
 const fakeEvents = [
   { agent: 'orchestrator',   action: '生成任务计划',      confidence: 0.95, time: '00:00:02', status: 'done' as const },
@@ -26,11 +27,24 @@ function agentColor(agent: string): string {
 
 export default function Provenance() {
   const { reportId } = useParams<{ reportId: string }>()
+  const [events, setEvents] = useState<any[]>([])
   const [verified, setVerified] = useState<boolean | null>(null)
 
+  useEffect(() => {
+    if (!reportId) return
+    auditApi.get(reportId)
+      .then((res: any) => setEvents(res.events ?? []))
+      .catch(console.error)
+  }, [reportId])
+
   const handleVerify = () => {
-    setVerified(true)
+    if (!reportId) return
+    auditApi.verify(reportId)
+      .then(() => setVerified(true))
+      .catch(() => setVerified(false))
   }
+
+  const displayEvents = events.length > 0 ? events : fakeEvents
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-8">
@@ -44,7 +58,7 @@ export default function Provenance() {
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-6">
         <div className="mb-4 text-sm font-medium text-slate-200">Agent 执行链</div>
         <ol className="space-y-3 border-l-2 border-slate-700 pl-5">
-          {fakeEvents.map((e, i) => (
+          {displayEvents.map((e, i) => (
             <li key={i} className="relative">
               <span className={`absolute -left-[26px] top-1.5 h-3.5 w-3.5 rounded-full ${agentColor(e.agent)} ring-2 ring-slate-900`} />
               <div className="flex items-center justify-between">
@@ -53,8 +67,8 @@ export default function Provenance() {
                   <span className="ml-3 text-slate-400">{e.action}</span>
                 </div>
                 <div className="flex gap-4 text-xs text-slate-500">
-                  <span>conf: {e.confidence.toFixed(2)}</span>
-                  <span className="font-mono">{e.time}</span>
+                  <span>conf: {typeof e.confidence === 'number' ? e.confidence.toFixed(2) : '-'}</span>
+                  <span className="font-mono">{e.time ?? e.timestamp ?? ''}</span>
                 </div>
               </div>
             </li>
@@ -70,7 +84,7 @@ export default function Provenance() {
             onClick={handleVerify}
             className="rounded bg-blue-600/20 px-2.5 py-1 text-xs font-medium text-blue-400 hover:bg-blue-600/30"
           >
-            {verified === null ? '验证链完整性' : '✓ 验证通过'}
+            {verified === null ? '验证链完整性' : verified ? '✓ 验证通过' : '✗ 验证失败'}
           </button>
         </div>
         <div className="mt-3 break-all rounded bg-slate-950 p-3 font-mono text-xs text-slate-400">
@@ -78,7 +92,12 @@ export default function Provenance() {
         </div>
         {verified === true && (
           <div className="mt-2 text-xs text-green-400">
-            链完整性验证通过 — 9 条审计日志哈希匹配，无任何篡改。
+            链完整性验证通过 — 审计日志哈希匹配，无任何篡改。
+          </div>
+        )}
+        {verified === false && (
+          <div className="mt-2 text-xs text-red-400">
+            链完整性验证失败 — 请检查数据源。
           </div>
         )}
       </div>

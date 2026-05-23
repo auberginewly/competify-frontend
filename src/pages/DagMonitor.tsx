@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import ReactFlow, {
   Background,
@@ -9,6 +9,8 @@ import ReactFlow, {
   ReactFlowProvider,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { useDagSocket } from '@/hooks/useDagSocket'
+import { useTaskStore } from '@/store/taskStore'
 import { StatusNode, type StatusNodeData } from '@/components/dag/StatusNode'
 import type { AgentStatus } from '@/types/api'
 
@@ -71,73 +73,20 @@ function buildEdges(): Edge[] {
   ]
 }
 
-function buildNodes(statusMap: Map<string, AgentStatus>): Node<StatusNodeData>[] {
+function buildNodes(statuses: Record<string, AgentStatus>): Node<StatusNodeData>[] {
   return agentDefs.map((a) => ({
     id: a.id,
     type: 'status',
     position: { x: a.x, y: a.y },
-    data: { label: a.label, status: statusMap.get(a.id) ?? 'pending' },
+    data: { label: a.label, status: statuses[a.id] ?? 'pending' },
   }))
-}
-
-// executionWave returns which "wave" an agent belongs to for simulated progress.
-function executionWave(id: string): number {
-  if (id === 'orchestrator') return 0
-  if (id.startsWith('collector')) return 1
-  if (id === 'cleaner') return 2
-  if (id.startsWith('analyzer')) return 3
-  if (id === 'cross_reviewer') return 4
-  if (id === 'writer') return 5
-  if (id === 'final_reviewer') return 6
-  return 0
-}
-
-function useMockDAGProgress() {
-  const [statusMap, setStatusMap] = useState<Map<string, AgentStatus>>(
-    () => new Map(agentDefs.map((a) => [a.id, 'pending']))
-  )
-  const [logs, setLogs] = useState<string[]>([])
-  const tickRef = useRef(0)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      tickRef.current += 1
-      const tick = tickRef.current
-      setStatusMap((prev) => {
-        const next = new Map(prev)
-        agentDefs.forEach((a) => {
-          const wave = executionWave(a.id)
-          const start = wave * 8 + 1
-          const end = start + 5
-          const s = next.get(a.id)!
-          if (tick >= start && s === 'pending') {
-            next.set(a.id, 'running')
-          } else if (tick >= end && s === 'running') {
-            next.set(a.id, 'done')
-          }
-        })
-        return next
-      })
-      if (tick % 4 === 0) {
-        setLogs((l) => {
-          const msg = `[${new Date().toLocaleTimeString()}] tick=${tick} running=${agentDefs.filter((a) => statusMap.get(a.id) === 'running').length}`
-          return [...l.slice(-19), msg]
-        })
-      }
-      if (tick > 60) {
-        clearInterval(interval)
-      }
-    }, 400)
-    return () => clearInterval(interval)
-  }, [statusMap])
-
-  return { statusMap, logs }
 }
 
 function DAGCanvas() {
   const { taskId } = useParams<{ taskId: string }>()
-  const { statusMap, logs } = useMockDAGProgress()
-  const nodes = useMemo(() => buildNodes(statusMap), [statusMap])
+  const { logs, connected } = useDagSocket(taskId)
+  const statuses = useTaskStore((s) => s.statuses)
+  const nodes = useMemo(() => buildNodes(statuses), [statuses])
   const edges = useMemo(() => buildEdges(), [])
 
   return (
@@ -156,7 +105,7 @@ function DAGCanvas() {
           <Controls />
         </ReactFlow>
         <div className="absolute right-3 top-3 rounded bg-slate-900/80 px-2 py-1 text-[10px] text-slate-400 backdrop-blur">
-          task: {taskId ?? 'demo'}
+          task: {taskId ?? 'demo'} {connected ? '●' : '○'}
         </div>
       </div>
 
@@ -205,7 +154,7 @@ export default function DagMonitor() {
       <header className="mb-4">
         <h1 className="text-xl font-semibold text-slate-100">DAG 实时监控</h1>
         <p className="mt-0.5 text-xs text-slate-400">
-          14 个节点 · 自动模拟执行进度 · ReactFlow 画布
+          14 个节点 · WebSocket 实时推送 · ReactFlow 画布
         </p>
       </header>
       <div className="min-h-0 flex-1">

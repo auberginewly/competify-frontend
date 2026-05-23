@@ -10,8 +10,8 @@ export function useProvenance(reportId: string | undefined) {
   useEffect(() => {
     if (!reportId) return
     auditApi
-      .timeline(reportId)
-      .then(setEvents)
+      .get(reportId)
+      .then((res: any) => setEvents(res.events ?? []))
       .catch((e: Error) => setError(e))
   }, [reportId])
 

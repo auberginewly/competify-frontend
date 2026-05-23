@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { ontologyApi } from '@/api/ontology'
+import type { Competitor } from '@/types/api'
 
 interface NodeDef {
   id: string
@@ -38,6 +40,13 @@ const typeLabel = (t: string) => {
 
 export default function OntologyGraph() {
   const [hovered, setHovered] = useState<string | null>(null)
+  const [competitors, setCompetitors] = useState<Competitor[]>([])
+
+  useEffect(() => {
+    ontologyApi.list()
+      .then(setCompetitors)
+      .catch(console.error)
+  }, [])
 
   return (
     <div className="space-y-6 p-8">
@@ -91,6 +100,21 @@ export default function OntologyGraph() {
               {label}
             </span>
           ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <div className="text-sm font-medium text-slate-200">竞品列表（API）</div>
+        <div className="mt-2 space-y-2">
+          {competitors.map((c) => (
+            <div key={c.uid} className="flex items-center justify-between text-xs text-slate-400">
+              <span className="font-medium text-slate-300">{c.company_name}</span>
+              <span>{c.headquarters}</span>
+            </div>
+          ))}
+          {competitors.length === 0 && (
+            <div className="text-xs text-slate-600">暂无数据</div>
+          )}
         </div>
       </div>
 
