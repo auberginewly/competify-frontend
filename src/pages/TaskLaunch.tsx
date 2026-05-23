@@ -32,7 +32,7 @@ export default function TaskLaunch() {
       requested_by: 'demo-user',
     })
     if (result) {
-      navigate(`/dag/${result.task_id}`)
+      navigate(`/dag/${result}`)
     }
   }
 

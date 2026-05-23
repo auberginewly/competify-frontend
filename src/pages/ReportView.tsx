@@ -4,14 +4,6 @@ import ReactMarkdown from 'react-markdown'
 import { reportsApi } from '@/api/reports'
 import type { FinalReport } from '@/types/api'
 
-const fakeFootnotes = [
-  { id: 'fn-1', conclusion: 'Cursor 核心功能矩阵', confidence: 0.88, provenance_id: 'prov-1', viking_uri: 'viking://competify/tasks/task_cursor/analyzers/feature' },
-  { id: 'fn-2', conclusion: 'Cursor 定价策略', confidence: 0.95, provenance_id: 'prov-2', viking_uri: 'viking://competify/tasks/task_cursor/analyzers/pricing' },
-  { id: 'fn-3', conclusion: 'Cursor 技术栈推断', confidence: 0.72, provenance_id: 'prov-3', viking_uri: 'viking://competify/tasks/task_cursor/analyzers/tech' },
-]
-
-const fakeMerkleRoot = '0x7a3f9e2b1c8d4e5f6a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f'
-
 function confidenceColor(c: number): string {
   if (c >= 0.9) return 'text-green-400'
   if (c >= 0.75) return 'text-blue-400'
@@ -41,16 +33,18 @@ export default function ReportView() {
       .finally(() => setLoading(false))
   }, [id])
 
+  const footnotes = report?.footnotes ?? []
   const overallConfidence = useMemo(() => {
-    const sum = fakeFootnotes.reduce((acc, f) => acc + f.confidence, 0)
-    return sum / fakeFootnotes.length
-  }, [])
+    if (footnotes.length === 0) return 0
+    const sum = footnotes.reduce((acc, f) => acc + f.confidence, 0)
+    return sum / footnotes.length
+  }, [footnotes])
 
   if (loading) return <div className="p-8 text-slate-400">加载报告中…</div>
   if (error) return <div className="p-8 text-red-400">加载失败: {error}</div>
 
   const content = report?.content ?? ''
-  const merkleRoot = report?.merkle_root ?? fakeMerkleRoot
+  const merkleRoot = report?.merkle_root ?? '未知'
 
   return (
     <div className="mx-auto flex max-w-5xl gap-6 p-8">
@@ -93,7 +87,8 @@ export default function ReportView() {
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
           <div className="text-sm font-medium text-slate-200">溯源脚注</div>
           <div className="mt-3 space-y-3">
-            {fakeFootnotes.map((fn) => (
+            {footnotes.length === 0 && <div className="text-xs text-slate-500">暂无脚注数据</div>}
+            {footnotes.map((fn) => (
               <div key={fn.id} className="rounded border border-slate-700/60 bg-slate-800/40 p-2.5">
                 <div className="text-xs text-slate-300">{fn.conclusion}</div>
                 <div className="mt-1.5 flex items-center justify-between text-[10px]">

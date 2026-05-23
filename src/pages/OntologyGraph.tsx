@@ -9,15 +9,6 @@ interface NodeDef {
   y: number
 }
 
-const fakeNodes: NodeDef[] = [
-  { id: 'Cursor',      type: 'Competitor', x: 50, y: 45 },
-  { id: 'Tab',         type: 'Feature',    x: 25, y: 25 },
-  { id: 'Composer',    type: 'Feature',    x: 75, y: 25 },
-  { id: 'Agent Mode',  type: 'Feature',    x: 25, y: 65 },
-  { id: 'Pro Tier',    type: 'Pricing',    x: 75, y: 65 },
-  { id: 'TypeScript',  type: 'Tech',       x: 50, y: 85 },
-]
-
 const typeColor = (t: string) => {
   switch (t) {
     case 'Competitor': return 'border-blue-400 bg-blue-500/20 text-blue-300'
@@ -41,10 +32,28 @@ const typeLabel = (t: string) => {
 export default function OntologyGraph() {
   const [hovered, setHovered] = useState<string | null>(null)
   const [competitors, setCompetitors] = useState<Competitor[]>([])
+  const [nodes, setNodes] = useState<NodeDef[]>([])
+  const [edges, setEdges] = useState<{ source: string; target: string }[]>([])
 
   useEffect(() => {
     ontologyApi.list()
       .then(setCompetitors)
+      .catch(console.error)
+    ontologyApi.graph()
+      .then((res) => {
+        const apiNodes = (res.nodes ?? []).map((n: any, i: number) => ({
+          id: n.data?.label ?? n.data?.id ?? `n${i}`,
+          type: (n.data?.type === 'competitor' ? 'Competitor' : 'Feature') as NodeDef['type'],
+          x: 20 + (i % 5) * 15,
+          y: 20 + Math.floor(i / 5) * 20,
+        }))
+        const apiEdges = (res.edges ?? []).map((e: any) => ({
+          source: e.data?.source ?? '',
+          target: e.data?.target ?? '',
+        }))
+        setNodes(apiNodes.length ? apiNodes : [])
+        setEdges(apiEdges)
+      })
       .catch(console.error)
   }, [])
 
@@ -59,31 +68,45 @@ export default function OntologyGraph() {
 
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-6">
         <div className="relative h-96 rounded border border-dashed border-slate-700 bg-slate-950/60">
-          {fakeNodes.map((n) => (
-            <div
-              key={n.id}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition hover:scale-110 ${typeColor(n.type)} ${hovered === n.id ? 'ring-2 ring-white/20' : ''}`}
-              style={{ left: `${n.x}%`, top: `${n.y}%` }}
-              onMouseEnter={() => setHovered(n.id)}
-              onMouseLeave={() => setHovered(null)}
-            >
-              {n.id}
-              {hovered === n.id && (
-                <div className="absolute left-1/2 top-full z-10 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-[10px] text-slate-300 shadow-lg ring-1 ring-slate-700">
-                  {typeLabel(n.type)} 节点
-                </div>
-              )}
+          {nodes.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm text-slate-500">
+              暂无图谱数据
             </div>
-          ))}
-
-          {/* Fake edges drawn as absolutely positioned lines */}
-          <svg className="pointer-events-none absolute inset-0 h-full w-full">
-            <line x1="50%" y1="45%" x2="25%" y2="25%" stroke="#334155" strokeWidth="1" strokeDasharray="4" />
-            <line x1="50%" y1="45%" x2="75%" y2="25%" stroke="#334155" strokeWidth="1" strokeDasharray="4" />
-            <line x1="50%" y1="45%" x2="25%" y2="65%" stroke="#334155" strokeWidth="1" strokeDasharray="4" />
-            <line x1="50%" y1="45%" x2="75%" y2="65%" stroke="#334155" strokeWidth="1" strokeDasharray="4" />
-            <line x1="50%" y1="45%" x2="50%" y2="85%" stroke="#334155" strokeWidth="1" strokeDasharray="4" />
-          </svg>
+          ) : (
+            <>
+              {nodes.map((n) => (
+                <div
+                  key={n.id}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition hover:scale-110 ${typeColor(n.type)} ${hovered === n.id ? 'ring-2 ring-white/20' : ''}`}
+                  style={{ left: `${n.x}%`, top: `${n.y}%` }}
+                  onMouseEnter={() => setHovered(n.id)}
+                  onMouseLeave={() => setHovered(null)}
+                >
+                  {n.id}
+                  {hovered === n.id && (
+                    <div className="absolute left-1/2 top-full z-10 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-[10px] text-slate-300 shadow-lg ring-1 ring-slate-700">
+                      {typeLabel(n.type)} 节点
+                    </div>
+                  )}
+                </div>
+              ))}
+              <svg className="pointer-events-none absolute inset-0 h-full w-full">
+                {edges.map((e, i) => {
+                  const s = nodes.find((n) => n.id === e.source)
+                  const t = nodes.find((n) => n.id === e.target)
+                  if (!s || !t) return null
+                  return (
+                    <line
+                      key={i}
+                      x1={`${s.x}%`} y1={`${s.y}%`}
+                      x2={`${t.x}%`} y2={`${t.y}%`}
+                      stroke="#334155" strokeWidth="1" strokeDasharray="4"
+                    />
+                  )
+                })}
+              </svg>
+            </>
+          )}
         </div>
 
         <div className="mt-4 flex gap-5 text-xs text-slate-400">
@@ -115,16 +138,6 @@ export default function OntologyGraph() {
           {competitors.length === 0 && (
             <div className="text-xs text-slate-600">暂无数据</div>
           )}
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-300">时序播放</div>
-          <div className="text-xs text-slate-500">2025-01 — 2026-05</div>
-        </div>
-        <div className="mt-3 h-2 rounded bg-slate-700">
-          <div className="h-2 w-2/3 rounded bg-blue-500" />
         </div>
       </div>
     </div>
